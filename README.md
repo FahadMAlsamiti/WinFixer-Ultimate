@@ -41,7 +41,7 @@ Both versions include features to clean, repair, and optimize the system effecti
    - Clone the repository using Git:
      ```bash
      git clone https://github.com/FahadMAlsamiti/WinFixer-Ultimate.git
-     cd system-repair-utility
+     cd WinFixer-Ultimate-main
      ```
    - Or download the ZIP file and extract it.
 
