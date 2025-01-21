@@ -6,9 +6,8 @@ import sys
 import json
 from datetime import datetime
 
-# اسم ملف تسجيل التقارير كصفحة HTML
+# إعداد التقارير
 log_file = "repair_log_with_chkdsk.html"
-# اسم ملف الحالة لتخزين الأوامر المتبقية
 state_file = "repair_state_with_chkdsk.json"
 
 # تعريف الأوامر بالترتيب
@@ -26,12 +25,22 @@ commands = [
     "ipconfig /flushdns",
     "netsh int ip reset",
     "netsh winsock reset",
+    "ping 8.8.8.8 -n 4",
+    'netsh interface ipv4 set dns name="Ethernet" source=static address=8.8.8.8',
+    'netsh interface ipv4 add dns name="Ethernet" address=8.8.4.4 index=2',
+    'netsh interface ipv6 set dns name="Ethernet" source=static address=2001:4860:4860::8888',
+    'netsh interface ipv6 add dns name="Ethernet" address=2001:4860:4860::8844 index=2',
+    "wuauclt /detectnow",
+    "wuauclt /updatenow",
+    "sc config wuauserv start= auto && net start wuauserv",
+    "bootrec /fixmbr",
+    "bootrec /fixboot",
+    "bootrec /rebuildbcd",
     "cleanmgr /sagerun:1",
     "powercfg -h off",
     "echo 1 > nul | powershell -Command \"[System.GC]::Collect(); [System.GC]::WaitForPendingFinalizers(); [System.GC]::Collect();\""
 ]
 
-# HTML القالب الأساسي لصفحة
 html_template = """
 <!DOCTYPE html>
 <html lang="en">
@@ -43,12 +52,12 @@ html_template = """
         body {{
             font-family: Arial, sans-serif;
             margin: 20px;
-            background-color: #f9f9f9;
-            color: #333;
+            background-color: #000;
+            color: #fff;
         }}
         h1 {{
             text-align: center;
-            color: #0056b3;
+            color: #00bcd4;
         }}
         table {{
             width: 100%;
@@ -56,20 +65,33 @@ html_template = """
             margin: 20px 0;
         }}
         table, th, td {{
-            border: 1px solid #ddd;
+            border: 1px solid #555;
         }}
         th, td {{
             padding: 10px;
             text-align: left;
         }}
         th {{
-            background-color: #f4f4f4;
+            background-color: #1e1e1e;
+            color: #00bcd4;
         }}
         tr:nth-child(even) {{
-            background-color: #f9f9f9;
+            background-color: #222;
         }}
         tr:hover {{
-            background-color: #f1f1f1;
+            background-color: #333;
+        }}
+        footer {{
+            text-align: center;
+            margin-top: 20px;
+        }}
+        .social-icons a {{
+            margin: 0 10px;
+            color: #00bcd4;
+            text-decoration: none;
+        }}
+        .social-icons a:hover {{
+            color: #fff;
         }}
     </style>
 </head>
@@ -88,12 +110,19 @@ html_template = """
             {rows}
         </tbody>
     </table>
+    <footer>
+        <p>Developed by <strong>En.FahadAlsamiti</strong></p>
+        <div class="social-icons">
+            <a href="https://x.com/fahadalsamiti" target="_blank">X</a>
+            <a href="https://github.com/FahadMAlsamiti" target="_blank">GitHub</a>
+        </div>
+    </footer>
 </body>
 </html>
 """
 
 def write_html_log(command, status, details):
-    """تسجيل العملية في ملف HTML"""
+    """تسجيل العمليات في ملف HTML"""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     row = f"<tr><td>{timestamp}</td><td>{command}</td><td>{status}</td><td>{details}</td></tr>\n"
     if not os.path.exists(log_file):
@@ -108,19 +137,19 @@ def write_html_log(command, status, details):
             f.truncate()
 
 def is_admin():
-    """التحقق مما إذا كان البرنامج يعمل بصلاحيات المسؤول"""
+    """التحقق من صلاحيات المسؤول"""
     try:
         return ctypes.windll.shell32.IsUserAnAdmin()
     except:
         return False
 
 def save_state(remaining_commands):
-    """حفظ الأوامر المتبقية في ملف"""
+    """حفظ الأوامر المتبقية"""
     with open(state_file, "w") as f:
         json.dump({"remaining_commands": remaining_commands}, f)
 
 def load_state():
-    """تحميل الأوامر المتبقية من الملف"""
+    """تحميل الأوامر المتبقية"""
     if os.path.exists(state_file):
         with open(state_file, "r") as f:
             state = json.load(f)
@@ -128,7 +157,7 @@ def load_state():
     return commands
 
 def run_commands_in_sequence(commands):
-    """تشغيل الأوامر بالترتيب والتعامل مع الأخطاء"""
+    """تنفيذ الأوامر بالتسلسل"""
     remaining_commands = commands
     for command in commands:
         write_html_log(command, "Running", "Started execution")
@@ -138,26 +167,19 @@ def run_commands_in_sequence(commands):
             remaining_commands.remove(command)
             save_state(remaining_commands)
         elif "chkdsk" in command:
-            write_html_log(command, "Restart Required", "chkdsk needs a restart to complete.")
+            write_html_log(command, "Restart Required", "chkdsk needs restart.")
             save_state(remaining_commands)
             os.system("shutdown /r /t 0")
             return
         else:
-            write_html_log(command, "Error", "An error occurred during execution")
+            write_html_log(command, "Error", "An error occurred. Retrying...")
+            process = subprocess.run(f"echo y | {command}", shell=True)
 
-def register_autorun():
-    """إضافة البرنامج إلى التشغيل التلقائي"""
-    # إعداد التشغيل التلقائي...
-    pass
-
-def unregister_autorun():
-    """إزالة البرنامج من التشغيل التلقائي"""
-    # إزالة التشغيل التلقائي...
-    pass
+    write_html_log("Program Finished", "Complete", "All commands executed successfully")
+    os.system("shutdown /r /t 0")
 
 if __name__ == "__main__":
     if not is_admin():
         ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
     else:
-        commands_to_execute = load_state()
-        run_commands_in_sequence(commands_to_execute)
+        run_commands_in_sequence(load_state())
